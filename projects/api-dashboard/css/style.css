@@ -75,6 +75,31 @@
     color: var(--accent);
 }
 
+.status.error {
+    background: color-mix(in srgb, #ff6b6b 30%, transparent);
+    color: #ff8a8a;
+}
+
+.dashboard-status {
+    margin-bottom: 20px;
+    font-size: 0.92rem;
+    color: var(--muted);
+}
+
+.dashboard-status[data-type="success"] {
+    color: var(--primary);
+}
+
+.dashboard-status[data-type="warn"] {
+    color: var(--accent);
+}
+
+.log-empty {
+    grid-template-columns: 1fr !important;
+    color: var(--muted);
+    justify-content: center;
+}
+
 @media (max-width: 720px) {
     .stats-grid {
         grid-template-columns: repeat(2, minmax(0, 1fr));
