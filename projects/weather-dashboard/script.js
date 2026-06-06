@@ -143,7 +143,7 @@ function getLocationWeather() {
             const { latitude, longitude, accuracy } = position.coords;
             console.log(`✅ Location received - Lat: ${latitude}, Lon: ${longitude}, Accuracy: ${accuracy}m`);
             
-            // Use reverse geocoding to get city name from coordinates
+            // Fetch weather using coordinates with a cache-busting unique parameter
             fetchWeatherByCoords(latitude, longitude);
         },
         (error) => {
@@ -168,9 +168,9 @@ function getLocationWeather() {
             showError(errorMsg);
         },
         {
-            enableHighAccuracy: true,   // Use GPS for better accuracy (slower but more accurate)
+            enableHighAccuracy: true,   // Use GPS for better accuracy
             timeout: 15000,             // 15 second timeout
-            maximumAge: 0               // Don't use cached location - get fresh data
+            maximumAge: 0               // Don't use cached location
         }
     );
 }
@@ -180,40 +180,42 @@ async function fetchWeatherByCoords(lat, lon) {
     try {
         console.log(`🌤️ Fetching weather for coordinates: ${lat}, ${lon}`);
         
-        // Add timestamp to prevent caching
+        // Create unique cache-busting parameter - use random value
+        const cacheBreaker = Math.random().toString(36).substring(7);
         const timestamp = Date.now();
-        const weatherUrl = `${BASE_URL}/data/2.5/weather?lat=${lat}&lon=${lon}&appid=${API_KEY}&units=metric&_t=${timestamp}`;
         
-        console.log(`📡 Fetching from: ${weatherUrl}`);
+        // Use the weather API with multiple cache-busting parameters
+        const weatherUrl = `${BASE_URL}/data/2.5/weather?lat=${lat}&lon=${lon}&appid=${API_KEY}&units=metric&_cb=${cacheBreaker}&_t=${timestamp}`;
         
-        // Get weather data with no-cache headers
-        const weatherResponse = await fetch(weatherUrl, {
+        console.log(`📡 Fetching weather from: ${weatherUrl}`);
+        
+        // Aggressive no-cache headers + credentials to bypass service workers
+        const fetchOptions = {
             cache: 'no-store',
             headers: { 
                 'Cache-Control': 'no-cache, no-store, must-revalidate',
                 'Pragma': 'no-cache',
                 'Expires': '0'
-            }
-        });
+            },
+            credentials: 'omit'
+        };
+        
+        const weatherResponse = await fetch(weatherUrl, fetchOptions);
 
         if (!weatherResponse.ok) {
             throw new Error('Failed to fetch weather data');
         }
 
         const weatherData = await weatherResponse.json();
-        console.log('🌍 Full Weather API Response:', weatherData);
-        console.log('Weather data received - Name:', weatherData.name, 'Country:', weatherData.sys.country);
+        console.log('✅ Weather API Response received:');
+        console.log('   City:', weatherData.name);
+        console.log('   Country:', weatherData.sys.country);
+        console.log('   Coordinates:', { lat: weatherData.coord.lat, lon: weatherData.coord.lon });
+        console.log('Full Response:', weatherData);
 
         // Get forecast data
-        const forecastUrl = `${BASE_URL}/data/2.5/forecast?lat=${lat}&lon=${lon}&appid=${API_KEY}&units=metric&_t=${timestamp}`;
-        const forecastResponse = await fetch(forecastUrl, {
-            cache: 'no-store',
-            headers: { 
-                'Cache-Control': 'no-cache, no-store, must-revalidate',
-                'Pragma': 'no-cache',
-                'Expires': '0'
-            }
-        });
+        const forecastUrl = `${BASE_URL}/data/2.5/forecast?lat=${lat}&lon=${lon}&appid=${API_KEY}&units=metric&_cb=${cacheBreaker}&_t=${timestamp}`;
+        const forecastResponse = await fetch(forecastUrl, fetchOptions);
 
         if (!forecastResponse.ok) {
             throw new Error('Failed to fetch forecast data');
