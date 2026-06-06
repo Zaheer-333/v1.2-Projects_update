@@ -112,18 +112,41 @@ async function fetchWeather(city) {
 function getLocationWeather() {
     if (navigator.geolocation) {
         showLoading(true);
+        showError('📍 Getting your location... Please allow location access when prompted.');
+        
+        // Use high accuracy geolocation
         navigator.geolocation.getCurrentPosition(
             (position) => {
                 const { latitude, longitude } = position.coords;
+                console.log(`✅ Location found - Lat: ${latitude}, Lon: ${longitude}`);
                 fetchWeatherByCoords(latitude, longitude);
             },
             (error) => {
+                console.error('Geolocation error:', error);
                 showLoading(false);
-                showError('Unable to get your location. Please search for a city instead.');
+                
+                let errorMsg = 'Unable to get your location. ';
+                
+                if (error.code === error.PERMISSION_DENIED) {
+                    errorMsg += 'Please enable location permissions in your browser settings.';
+                } else if (error.code === error.POSITION_UNAVAILABLE) {
+                    errorMsg += 'Location information is unavailable.';
+                } else if (error.code === error.TIMEOUT) {
+                    errorMsg += 'Location request timed out. Please try again.';
+                } else {
+                    errorMsg += 'Please search for a city instead.';
+                }
+                
+                showError(errorMsg);
+            },
+            {
+                enableHighAccuracy: true,      // Use GPS for better accuracy
+                timeout: 10000,                // 10 second timeout
+                maximumAge: 0                  // Don't use cached location
             }
         );
     } else {
-        showError('Geolocation is not supported by your browser');
+        showError('❌ Geolocation is not supported by your browser. Please search for a city instead.');
     }
 }
 
@@ -152,16 +175,17 @@ async function fetchWeatherByCoords(lat, lon) {
 
         const forecastData = await forecastResponse.json();
 
-        // Display data
+        // Display data - use the actual location from the weather API response
         displayWeather(weatherData, weatherData.name, weatherData.sys.country);
         displayForecast(forecastData);
 
         showLoading(false);
         showDashboard();
+        clearError();
 
     } catch (error) {
         showLoading(false);
-        showError(error.message);
+        showError('Error fetching weather: ' + error.message);
     }
 }
 
