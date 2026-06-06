@@ -210,10 +210,9 @@ async function reverseGeocodeAndFetchWeather(lat, lon) {
 
         const forecastData = await forecastResponse.json();
 
-        // Display data using the actual location from the weather API
-        // Use weatherData.name which will be the API's detected city
-        console.log(`📍 Displaying weather for: ${weatherData.name}, ${weatherData.sys.country}`);
-        displayWeather(weatherData, weatherData.name, weatherData.sys.country);
+        // Display data using Nominatim's city name (which is correct) but OpenWeatherMap's weather data
+        console.log(`📍 Displaying weather for: ${cityName}, ${countryCode}`);
+        displayWeather(weatherData, cityName, countryCode);
         displayForecast(forecastData);
 
         showLoading(false);
