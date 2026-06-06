@@ -58,7 +58,11 @@ async function fetchWeather(city) {
 
         // Get coordinates from city name
         const geoResponse = await fetch(
-            `${BASE_URL}/geo/1.0/direct?q=${city}&limit=1&appid=${API_KEY}`
+            `${BASE_URL}/geo/1.0/direct?q=${city}&limit=1&appid=${API_KEY}`,
+            {
+                cache: 'no-store',
+                headers: { 'Cache-Control': 'no-cache' }
+            }
         );
 
         if (!geoResponse.ok) {
@@ -75,7 +79,11 @@ async function fetchWeather(city) {
 
         // Get weather data
         const weatherResponse = await fetch(
-            `${BASE_URL}/data/2.5/weather?lat=${lat}&lon=${lon}&appid=${API_KEY}&units=metric`
+            `${BASE_URL}/data/2.5/weather?lat=${lat}&lon=${lon}&appid=${API_KEY}&units=metric&_t=${Date.now()}`,
+            {
+                cache: 'no-store',
+                headers: { 'Cache-Control': 'no-cache' }
+            }
         );
 
         if (!weatherResponse.ok) {
@@ -86,7 +94,11 @@ async function fetchWeather(city) {
 
         // Get forecast data
         const forecastResponse = await fetch(
-            `${BASE_URL}/data/2.5/forecast?lat=${lat}&lon=${lon}&appid=${API_KEY}&units=metric`
+            `${BASE_URL}/data/2.5/forecast?lat=${lat}&lon=${lon}&appid=${API_KEY}&units=metric&_t=${Date.now()}`,
+            {
+                cache: 'no-store',
+                headers: { 'Cache-Control': 'no-cache' }
+            }
         );
 
         if (!forecastResponse.ok) {
@@ -110,64 +122,98 @@ async function fetchWeather(city) {
 
 // Get Weather by Geolocation
 function getLocationWeather() {
-    if (navigator.geolocation) {
-        showLoading(true);
-        showError('📍 Getting your location... Please allow location access when prompted.');
-        
-        // Use high accuracy geolocation
-        navigator.geolocation.getCurrentPosition(
-            (position) => {
-                const { latitude, longitude } = position.coords;
-                console.log(`✅ Location found - Lat: ${latitude}, Lon: ${longitude}`);
-                fetchWeatherByCoords(latitude, longitude);
-            },
-            (error) => {
-                console.error('Geolocation error:', error);
-                showLoading(false);
-                
-                let errorMsg = 'Unable to get your location. ';
-                
-                if (error.code === error.PERMISSION_DENIED) {
-                    errorMsg += 'Please enable location permissions in your browser settings.';
-                } else if (error.code === error.POSITION_UNAVAILABLE) {
-                    errorMsg += 'Location information is unavailable.';
-                } else if (error.code === error.TIMEOUT) {
-                    errorMsg += 'Location request timed out. Please try again.';
-                } else {
-                    errorMsg += 'Please search for a city instead.';
-                }
-                
-                showError(errorMsg);
-            },
-            {
-                enableHighAccuracy: true,      // Use GPS for better accuracy
-                timeout: 10000,                // 10 second timeout
-                maximumAge: 0                  // Don't use cached location
-            }
-        );
-    } else {
+    console.log('🔍 Location button clicked');
+    
+    if (!navigator.geolocation) {
+        console.error('❌ Geolocation not supported');
         showError('❌ Geolocation is not supported by your browser. Please search for a city instead.');
+        return;
     }
+
+    showLoading(true);
+    showError('📍 Requesting your location... Please allow location access in the permission popup.');
+    
+    console.log('📍 Starting geolocation request with high accuracy...');
+    
+    navigator.geolocation.getCurrentPosition(
+        (position) => {
+            console.log('✅ Position success callback triggered');
+            console.log('Position object:', position);
+            
+            const { latitude, longitude, accuracy } = position.coords;
+            console.log(`✅ Location received - Lat: ${latitude}, Lon: ${longitude}, Accuracy: ${accuracy}m`);
+            
+            // Use reverse geocoding to get city name from coordinates
+            fetchWeatherByCoords(latitude, longitude);
+        },
+        (error) => {
+            console.error('❌ Position error callback triggered');
+            console.error('Geolocation error:', error);
+            console.error('Error code:', error.code);
+            
+            showLoading(false);
+            
+            let errorMsg = '❌ Unable to get your location. ';
+            
+            if (error.code === 1) { // PERMISSION_DENIED
+                errorMsg = '🔒 Permission denied! Please enable location access in your browser settings and try again.';
+            } else if (error.code === 2) { // POSITION_UNAVAILABLE
+                errorMsg = '📍 Location information unavailable. Please ensure location services are enabled on your device.';
+            } else if (error.code === 3) { // TIMEOUT
+                errorMsg = '⏱️ Location request timed out. Please try again or search for a city.';
+            } else {
+                errorMsg += 'Please search for a city instead.';
+            }
+            
+            showError(errorMsg);
+        },
+        {
+            enableHighAccuracy: true,   // Use GPS for better accuracy (slower but more accurate)
+            timeout: 15000,             // 15 second timeout
+            maximumAge: 0               // Don't use cached location - get fresh data
+        }
+    );
 }
 
 // Fetch Weather by Coordinates
 async function fetchWeatherByCoords(lat, lon) {
     try {
-        // Get weather data
-        const weatherResponse = await fetch(
-            `${BASE_URL}/data/2.5/weather?lat=${lat}&lon=${lon}&appid=${API_KEY}&units=metric`
-        );
+        console.log(`🌤️ Fetching weather for coordinates: ${lat}, ${lon}`);
+        
+        // Add timestamp to prevent caching
+        const timestamp = Date.now();
+        const weatherUrl = `${BASE_URL}/data/2.5/weather?lat=${lat}&lon=${lon}&appid=${API_KEY}&units=metric&_t=${timestamp}`;
+        
+        console.log(`📡 Fetching from: ${weatherUrl}`);
+        
+        // Get weather data with no-cache headers
+        const weatherResponse = await fetch(weatherUrl, {
+            cache: 'no-store',
+            headers: { 
+                'Cache-Control': 'no-cache, no-store, must-revalidate',
+                'Pragma': 'no-cache',
+                'Expires': '0'
+            }
+        });
 
         if (!weatherResponse.ok) {
             throw new Error('Failed to fetch weather data');
         }
 
         const weatherData = await weatherResponse.json();
+        console.log('🌍 Full Weather API Response:', weatherData);
+        console.log('Weather data received - Name:', weatherData.name, 'Country:', weatherData.sys.country);
 
         // Get forecast data
-        const forecastResponse = await fetch(
-            `${BASE_URL}/data/2.5/forecast?lat=${lat}&lon=${lon}&appid=${API_KEY}&units=metric`
-        );
+        const forecastUrl = `${BASE_URL}/data/2.5/forecast?lat=${lat}&lon=${lon}&appid=${API_KEY}&units=metric&_t=${timestamp}`;
+        const forecastResponse = await fetch(forecastUrl, {
+            cache: 'no-store',
+            headers: { 
+                'Cache-Control': 'no-cache, no-store, must-revalidate',
+                'Pragma': 'no-cache',
+                'Expires': '0'
+            }
+        });
 
         if (!forecastResponse.ok) {
             throw new Error('Failed to fetch forecast data');
@@ -175,7 +221,8 @@ async function fetchWeatherByCoords(lat, lon) {
 
         const forecastData = await forecastResponse.json();
 
-        // Display data - use the actual location from the weather API response
+        // Display data using the actual location from the weather API
+        console.log(`📍 Displaying weather for: ${weatherData.name}, ${weatherData.sys.country}`);
         displayWeather(weatherData, weatherData.name, weatherData.sys.country);
         displayForecast(forecastData);
 
@@ -184,8 +231,9 @@ async function fetchWeatherByCoords(lat, lon) {
         clearError();
 
     } catch (error) {
+        console.error('Error in fetchWeatherByCoords:', error);
         showLoading(false);
-        showError('Error fetching weather: ' + error.message);
+        showError('❌ Error fetching weather: ' + error.message);
     }
 }
 
