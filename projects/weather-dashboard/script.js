@@ -1,7 +1,6 @@
 // Weather API Configuration
 const API_KEY = '6fe4a62464026753c081e103b5dfaf96';
 const BASE_URL = 'https://api.openweathermap.org';
-const CORS_PROXY = 'https://cors-anywhere.herokuapp.com/';
 
 // DOM Elements
 const searchInput = document.getElementById('searchInput');
@@ -59,11 +58,7 @@ async function fetchWeather(city) {
 
         // Get coordinates from city name
         const geoResponse = await fetch(
-            `${BASE_URL}/geo/1.0/direct?q=${city}&limit=1&appid=${API_KEY}`,
-            {
-                cache: 'no-store',
-                headers: { 'Cache-Control': 'no-cache' }
-            }
+            `${BASE_URL}/geo/1.0/direct?q=${city}&limit=1&appid=${API_KEY}`
         );
 
         if (!geoResponse.ok) {
@@ -80,11 +75,7 @@ async function fetchWeather(city) {
 
         // Get weather data
         const weatherResponse = await fetch(
-            `${BASE_URL}/data/2.5/weather?lat=${lat}&lon=${lon}&appid=${API_KEY}&units=metric&_t=${Date.now()}`,
-            {
-                cache: 'no-store',
-                headers: { 'Cache-Control': 'no-cache' }
-            }
+            `${BASE_URL}/data/2.5/weather?lat=${lat}&lon=${lon}&appid=${API_KEY}&units=metric`
         );
 
         if (!weatherResponse.ok) {
@@ -95,11 +86,7 @@ async function fetchWeather(city) {
 
         // Get forecast data
         const forecastResponse = await fetch(
-            `${BASE_URL}/data/2.5/forecast?lat=${lat}&lon=${lon}&appid=${API_KEY}&units=metric&_t=${Date.now()}`,
-            {
-                cache: 'no-store',
-                headers: { 'Cache-Control': 'no-cache' }
-            }
+            `${BASE_URL}/data/2.5/forecast?lat=${lat}&lon=${lon}&appid=${API_KEY}&units=metric`
         );
 
         if (!forecastResponse.ok) {
@@ -144,8 +131,9 @@ function getLocationWeather() {
             const { latitude, longitude, accuracy } = position.coords;
             console.log(`✅ Location received - Lat: ${latitude}, Lon: ${longitude}, Accuracy: ${accuracy}m`);
             
-            // Fetch weather using coordinates with CORS proxy
-            fetchWeatherByCoords(latitude, longitude);
+            // Use Nominatim (free, no auth needed) to get city name from coordinates
+            // Then fetch weather
+            reverseGeocodeAndFetchWeather(latitude, longitude);
         },
         (error) => {
             console.error('❌ Position error callback triggered');
@@ -169,61 +157,61 @@ function getLocationWeather() {
             showError(errorMsg);
         },
         {
-            enableHighAccuracy: true,   // Use GPS for better accuracy
-            timeout: 15000,             // 15 second timeout
-            maximumAge: 0               // Don't use cached location
+            enableHighAccuracy: true,
+            timeout: 15000,
+            maximumAge: 0
         }
     );
 }
 
-// Fetch Weather by Coordinates
-async function fetchWeatherByCoords(lat, lon) {
+// Reverse Geocode using Nominatim and fetch weather
+async function reverseGeocodeAndFetchWeather(lat, lon) {
     try {
         console.log(`🌤️ Fetching weather for coordinates: ${lat}, ${lon}`);
         
-        // Create unique cache-busting parameter - use random value
-        const cacheBreaker = Math.random().toString(36).substring(7);
-        const timestamp = Date.now();
+        // Use Nominatim to get city name from coordinates (free, no CORS issues)
+        console.log('📍 Getting city name from coordinates using Nominatim...');
+        const nominatimUrl = `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lon}`;
         
-        // Build the weather URL with CORS proxy
-        const weatherUrl = `${CORS_PROXY}${BASE_URL}/data/2.5/weather?lat=${lat}&lon=${lon}&appid=${API_KEY}&units=metric&_cb=${cacheBreaker}&_t=${timestamp}`;
+        const nominatimResponse = await fetch(nominatimUrl);
         
-        console.log(`📡 Fetching weather from: ${weatherUrl}`);
+        if (!nominatimResponse.ok) {
+            console.warn('Nominatim reverse geocoding failed, will use API response');
+        }
         
-        // Fetch options for CORS request
-        const fetchOptions = {
-            cache: 'no-store',
-            headers: { 
-                'Cache-Control': 'no-cache, no-store, must-revalidate',
-                'Pragma': 'no-cache',
-                'Expires': '0'
-            }
-        };
+        const nominatimData = await nominatimResponse.json();
+        const cityName = nominatimData.address?.city || nominatimData.address?.town || nominatimData.address?.village || 'Your Location';
+        const countryCode = nominatimData.address?.country_code?.toUpperCase() || 'PK';
         
-        const weatherResponse = await fetch(weatherUrl, fetchOptions);
+        console.log(`🏙️ City from Nominatim: ${cityName}, ${countryCode}`);
+        
+        // Now fetch weather with simple, clean URL
+        console.log(`📡 Fetching weather from OpenWeatherMap...`);
+        const weatherUrl = `${BASE_URL}/data/2.5/weather?lat=${lat}&lon=${lon}&appid=${API_KEY}&units=metric`;
+        const weatherResponse = await fetch(weatherUrl);
 
         if (!weatherResponse.ok) {
-            throw new Error(`API error: ${weatherResponse.status} - ${weatherResponse.statusText}`);
+            throw new Error(`Failed to fetch weather data: ${weatherResponse.status}`);
         }
 
         const weatherData = await weatherResponse.json();
         console.log('✅ Weather API Response received:');
-        console.log('   City:', weatherData.name);
-        console.log('   Country:', weatherData.sys.country);
-        console.log('   Coordinates:', { lat: weatherData.coord.lat, lon: weatherData.coord.lon });
+        console.log('   API City:', weatherData.name);
+        console.log('   API Country:', weatherData.sys.country);
         console.log('Full Response:', weatherData);
 
-        // Get forecast data with CORS proxy
-        const forecastUrl = `${CORS_PROXY}${BASE_URL}/data/2.5/forecast?lat=${lat}&lon=${lon}&appid=${API_KEY}&units=metric&_cb=${cacheBreaker}&_t=${timestamp}`;
-        const forecastResponse = await fetch(forecastUrl, fetchOptions);
+        // Get forecast data
+        const forecastUrl = `${BASE_URL}/data/2.5/forecast?lat=${lat}&lon=${lon}&appid=${API_KEY}&units=metric`;
+        const forecastResponse = await fetch(forecastUrl);
 
         if (!forecastResponse.ok) {
-            throw new Error(`Forecast API error: ${forecastResponse.status}`);
+            throw new Error('Failed to fetch forecast data');
         }
 
         const forecastData = await forecastResponse.json();
 
         // Display data using the actual location from the weather API
+        // Use weatherData.name which will be the API's detected city
         console.log(`📍 Displaying weather for: ${weatherData.name}, ${weatherData.sys.country}`);
         displayWeather(weatherData, weatherData.name, weatherData.sys.country);
         displayForecast(forecastData);
@@ -233,7 +221,7 @@ async function fetchWeatherByCoords(lat, lon) {
         clearError();
 
     } catch (error) {
-        console.error('Error in fetchWeatherByCoords:', error);
+        console.error('Error in reverseGeocodeAndFetchWeather:', error);
         showLoading(false);
         showError('❌ Error fetching weather: ' + error.message + '. Please try searching for a city instead.');
     }
