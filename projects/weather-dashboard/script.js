@@ -1,6 +1,7 @@
 // Weather API Configuration
 const API_KEY = '6fe4a62464026753c081e103b5dfaf96';
 const BASE_URL = 'https://api.openweathermap.org';
+const CORS_PROXY = 'https://cors-anywhere.herokuapp.com/';
 
 // DOM Elements
 const searchInput = document.getElementById('searchInput');
@@ -143,7 +144,7 @@ function getLocationWeather() {
             const { latitude, longitude, accuracy } = position.coords;
             console.log(`✅ Location received - Lat: ${latitude}, Lon: ${longitude}, Accuracy: ${accuracy}m`);
             
-            // Fetch weather using coordinates with a cache-busting unique parameter
+            // Fetch weather using coordinates with CORS proxy
             fetchWeatherByCoords(latitude, longitude);
         },
         (error) => {
@@ -184,26 +185,25 @@ async function fetchWeatherByCoords(lat, lon) {
         const cacheBreaker = Math.random().toString(36).substring(7);
         const timestamp = Date.now();
         
-        // Use the weather API with multiple cache-busting parameters
-        const weatherUrl = `${BASE_URL}/data/2.5/weather?lat=${lat}&lon=${lon}&appid=${API_KEY}&units=metric&_cb=${cacheBreaker}&_t=${timestamp}`;
+        // Build the weather URL with CORS proxy
+        const weatherUrl = `${CORS_PROXY}${BASE_URL}/data/2.5/weather?lat=${lat}&lon=${lon}&appid=${API_KEY}&units=metric&_cb=${cacheBreaker}&_t=${timestamp}`;
         
         console.log(`📡 Fetching weather from: ${weatherUrl}`);
         
-        // Aggressive no-cache headers + credentials to bypass service workers
+        // Fetch options for CORS request
         const fetchOptions = {
             cache: 'no-store',
             headers: { 
                 'Cache-Control': 'no-cache, no-store, must-revalidate',
                 'Pragma': 'no-cache',
                 'Expires': '0'
-            },
-            credentials: 'omit'
+            }
         };
         
         const weatherResponse = await fetch(weatherUrl, fetchOptions);
 
         if (!weatherResponse.ok) {
-            throw new Error('Failed to fetch weather data');
+            throw new Error(`API error: ${weatherResponse.status} - ${weatherResponse.statusText}`);
         }
 
         const weatherData = await weatherResponse.json();
@@ -213,12 +213,12 @@ async function fetchWeatherByCoords(lat, lon) {
         console.log('   Coordinates:', { lat: weatherData.coord.lat, lon: weatherData.coord.lon });
         console.log('Full Response:', weatherData);
 
-        // Get forecast data
-        const forecastUrl = `${BASE_URL}/data/2.5/forecast?lat=${lat}&lon=${lon}&appid=${API_KEY}&units=metric&_cb=${cacheBreaker}&_t=${timestamp}`;
+        // Get forecast data with CORS proxy
+        const forecastUrl = `${CORS_PROXY}${BASE_URL}/data/2.5/forecast?lat=${lat}&lon=${lon}&appid=${API_KEY}&units=metric&_cb=${cacheBreaker}&_t=${timestamp}`;
         const forecastResponse = await fetch(forecastUrl, fetchOptions);
 
         if (!forecastResponse.ok) {
-            throw new Error('Failed to fetch forecast data');
+            throw new Error(`Forecast API error: ${forecastResponse.status}`);
         }
 
         const forecastData = await forecastResponse.json();
@@ -235,7 +235,7 @@ async function fetchWeatherByCoords(lat, lon) {
     } catch (error) {
         console.error('Error in fetchWeatherByCoords:', error);
         showLoading(false);
-        showError('❌ Error fetching weather: ' + error.message);
+        showError('❌ Error fetching weather: ' + error.message + '. Please try searching for a city instead.');
     }
 }
 
